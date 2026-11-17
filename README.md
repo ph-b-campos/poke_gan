@@ -16,7 +16,6 @@ Dados: <http://d2l-data.s3-accelerate.amazonaws.com/pokemon.zip>
 | [models/](models) | Só os modelos, um submódulo por modelo, cada um com sua pasta `config/` |
 | [training/](training) | Funções de treino: perdas, regularizações, aumento e os laços de treino |
 | [analise/](analise) | Avaliação: métricas (FID, IS, espécies, medidas da ponte) e figuras |
-| [tests/](tests) | Autotestes em CPU |
 | [original/](original) | Os scripts originais, antes da separação |
 
 ```
@@ -32,7 +31,6 @@ models/
               config/treino.py       EPOCAS, LR, LOTE, LOTE_AVAL, N_TESTE
 training/     juiz.py, dcgan.py, stylegan.py
 analise/      metricas.py, historico.py, plot_config.py, figuras_pokemon.py, figuras_estilo.py
-tests/        teste_dcgan.py, teste_stylegan.py
 ```
 
 Para mudar épocas, passos, taxa de aprendizado etc. de um modelo, edite `models/<modelo>/config/treino.py`.
@@ -44,10 +42,6 @@ Tudo roda como módulo, a partir da raiz do repositório.
 
 ```bash
 python -m tests.teste_dcgan
-```
-
-```bash
-python -m tests.teste_stylegan
 ```
 
 ```bash
