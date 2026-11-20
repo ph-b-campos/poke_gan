@@ -4,7 +4,7 @@ DCGAN em vários modos (minimax, não saturante, colapso, WGAN com clipping, WGA
 gerador StyleGAN-like para o mix de domínio entre espécies (a parte grossa do Pikachu, a fina do Lugia).
 
 Dados: <http://d2l-data.s3-accelerate.amazonaws.com/pokemon.zip>
-(sha1 `c065c0e2593b8b161a2d7873e42418bf6a21106c`).
+(sha1 `c065c0e2593b8b161a2d7873e42418bf6a21106c`), baixados por `python -m data_handler --baixar`.
 
 ## Estrutura
 
@@ -38,14 +38,11 @@ Caminhos e constantes do dataset ficam no [config.py](config.py) da raiz.
 
 ## Uso
 
-Tudo roda como módulo, a partir da raiz do repositório.
+Tudo roda como módulo, a partir da raiz do repositório, com Python 3.14 e as dependências do
+[requirements.txt](requirements.txt).
 
 ```bash
-python -m tests.teste_dcgan
-```
-
-```bash
-python -m data_handler --raiz .../pokemon
+python -m data_handler --baixar
 ```
 
 ```bash
@@ -68,18 +65,59 @@ python -m analise.figuras_pokemon curvas
 python -m analise.figuras_estilo --modo cor
 ```
 
-Ordem: autotestes, cache dos sprites, juiz (as GANs o usam nas avaliações), treinos e figuras.
-Os resultados vão para `resultados/` e as figuras para `resultados/figs/`.
+Ordem: dados (baixa o `pokemon.zip`, confere o sha1 e monta o cache `dados/pokemon64.npz`), juiz (as GANs o
+usam nas avaliações), treinos e figuras. Os resultados vão para `resultados/` e as figuras para `resultados/figs/`.
+Se já tiver os sprites extraídos em outro lugar, use `python -m data_handler --raiz .../pokemon`.
+
+### Com Docker
+
+O treino é pensado para GPU: no Linux, com o NVIDIA Container Toolkit, acrescente `--gpus all` ao `docker run`.
+Sem GPU tudo roda em CPU, o que é lento para treinar, mas serve para gerar figuras de um modelo já treinado.
+`dados/` e `resultados/` ficam fora da imagem, montadas como volumes:
+
+```bash
+docker build -t poke-gan .
+```
+
+```bash
+docker run --rm -v "$PWD/dados:/app/dados" -v "$PWD/resultados:/app/resultados" poke-gan
+```
+
+```bash
+docker run --rm -v "$PWD/dados:/app/dados" -v "$PWD/resultados:/app/resultados" poke-gan python -m training.juiz
+```
+
+O primeiro `docker run` baixa os dados (é o comando padrão da imagem). Os demais passos seguem a mesma forma,
+trocando o comando final, por exemplo `python -m training.stylegan --modo cor --horas 8`.
+
+### Misturar espécies com a StyleGAN
+
+Depois de treinar (`resultados/<modo>_G.pt`), escolha os pares na linha de comando. Em `A:B`, A dá a forma
+(posições grossas) e B o estilo (posições finas). As espécies são números da Pokédex de 1 a 386 (gerações 1 a 3).
+
+```bash
+python -m analise.figuras_estilo --modo cor --pares 25:249 4:131 --so-misturas
+```
+
+```bash
+python -m analise.figuras_estilo --modo cor --forma 25 1 133 --estilo 249 6 --so-misturas
+```
+
+| Opção | Efeito |
+|---|---|
+| `--pares A:B ...` | Uma figura `11_<modo>_ponte_A_B.png` por par, corte a corte |
+| `--forma N ...` e `--estilo N ...` | Grade forma x estilo, `10_<modo>_mistura_k*.png` (sobrescreve a grade padrão) |
+| `--so-misturas` | Gera só as misturas: pula curvas, espécies e medidas (não carrega o juiz, bem mais rápido) |
+
+Sem essas opções, o comando gera todas as figuras com os pares padrão.
 
 ### Equivalência com os comandos antigos
 
 | Antes (`original/`) | Agora |
 |---|---|
-| `python pokemon_gan.py teste` | `python -m tests.teste_dcgan` |
 | `python pokemon_gan.py prepara --raiz ...` | `python -m data_handler --raiz ...` |
 | `python pokemon_gan.py classificador` | `python -m training.juiz` |
 | `python pokemon_gan.py treina --modo wgp --passos 4000` | `python -m training.dcgan --modo wgp --passos 4000` |
-| `python estilo_gan.py teste` | `python -m tests.teste_stylegan` |
 | `python estilo_gan.py treina --modo paleta --horas 8` | `python -m training.stylegan --modo paleta --horas 8` |
 | `python estilo_gan.py figuras --modo paleta` | `python -m analise.figuras_estilo --modo paleta` |
 | `python figuras_pokemon.py <acao>` | `python -m analise.figuras_pokemon <acao>` |

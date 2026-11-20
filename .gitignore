@@ -3,3 +3,5 @@ __pycache__/
 .DS_Store
 dados/
 resultados/
+# projeto LaTeX do seminário (vai para o repositório da disciplina, não para este)
+Seminário/

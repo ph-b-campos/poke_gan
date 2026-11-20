@@ -1,7 +1,12 @@
 """Figuras de avaliação do mix de domínio StyleGAN-like (models/stylegan): curvas, grade de misturas, ponte,
 como a paleta funciona e medidas por ponto de corte.
 
-    python -m analise.figuras_estilo --modo paleta
+    python -m analise.figuras_estilo --modo cor                                   # todas as figuras, pares padrão
+    python -m analise.figuras_estilo --modo cor --pares 25:249 4:131 --so-misturas  # só as misturas desses pares
+    python -m analise.figuras_estilo --forma 25 1 133 --estilo 249 6 --so-misturas  # grade: forma x estilo
+
+As espécies são números da Pokédex (1 a CONFIG["especies"], gerações 1 a 3). Em --pares, A:B leva a forma
+(posições grossas) de A e o estilo (posições finas) de B.
 """
 import argparse
 import json
@@ -21,6 +26,8 @@ from utils import dispositivo
 
 A_ESP = (25, 1, 133, 143, 39, 54)        # forma: Pikachu, Bulbasaur, Eevee, Snorlax, Jigglypuff, Psyduck
 B_ESP = (249, 6, 130, 94, 7, 150)        # estilo: Lugia, Charizard, Gyarados, Gengar, Squirtle, Mewtwo
+PARES = ((25, 249), (249, 25), (1, 6), (6, 1), (150, 25), (133, 94))      # Pikachugia e Lugachu, e outros pares
+PARES_PALETA = ((25, 249), (1, 6), (133, 94))                             # figura "como a paleta funciona"
 
 
 def posicoes(G):
@@ -129,17 +136,17 @@ def curvas(modo, base):
 
 # ------------------------------------------------------------------ 2. grade de misturas, como na figura 3 da StyleGAN
 @torch.no_grad()
-def grade(G, modo, k, dev):
-    wa, wb = ws_de(G, A_ESP, 11, dev), ws_de(G, B_ESP, 12, dev)
+def grade(G, modo, k, dev, forma=A_ESP, estilo=B_ESP):
+    wa, wb = ws_de(G, forma, 11, dev), ws_de(G, estilo, 12, dev)
     pa, pb = sintese(G, wa), sintese(G, wb)
-    n, m = len(A_ESP), len(B_ESP)
-    fig, ax = plt.subplots(n + 1, m + 1, figsize=(1.7 * (m + 1), 1.75 * (n + 1)))
+    n, m = len(forma), len(estilo)
+    fig, ax = plt.subplots(n + 1, m + 1, figsize=(1.7 * (m + 1), 1.75 * (n + 1)), squeeze=False)
     for j in range(m):
         ax[0, j + 1].imshow(img(pb[j]))
-        ax[0, j + 1].set_title(f"#{B_ESP[j]}", fontsize=9)
+        ax[0, j + 1].set_title(f"#{estilo[j]}", fontsize=9)
     for i in range(n):
         ax[i + 1, 0].imshow(img(pa[i]))
-        ax[i + 1, 0].set_title(f"#{A_ESP[i]}", fontsize=9)
+        ax[i + 1, 0].set_title(f"#{forma[i]}", fontsize=9)
         x = sintese(G, torch.cat([wa[i:i + 1, :k].expand(m, -1, -1), wb[:, k:]], 1))
         for j in range(m):
             ax[i + 1, j + 1].imshow(img(x[j]))
@@ -285,25 +292,55 @@ def especies(G, modo, dev, lista=(25, 249, 1, 6, 130, 150, 94, 133), n_z=8):
     plt.close(fig)
 
 
-def figuras(modo):
+def figuras(modo, pares=None, forma=A_ESP, estilo=B_ESP, so_misturas=False):
+    """pares=None usa PARES (e PARES_PALETA no modo paleta). so_misturas=True gera só a grade, as pontes e,
+    no modo paleta, "como funciona": pula curvas, espécies e medidas, que carregam o juiz e são as partes lentas."""
     FIG.mkdir(parents=True, exist_ok=True)
     dev = dispositivo()
     G = carrega_G(modo, dev)
-    J, ref, base, y = reais(dev)
-    print(f"sprites reais (gerações 1 a 3): {json.dumps(base)}")
-    curvas(modo, base)
+    if not so_misturas:
+        J, ref, base, y = reais(dev)
+        print(f"sprites reais (gerações 1 a 3): {json.dumps(base)}")
+        curvas(modo, base)
     for k in ((2, 3, G.n_ws - 1) if G.n_ws > len(RESOLUCOES) else (2, 3)):       # grosso até 8, até 16, só a cor
-        grade(G, modo, k, dev)
-    for a, b in ((25, 249), (249, 25), (1, 6), (6, 1), (150, 25), (133, 94)):      # Pikachugia e Lugachu, e outros pares
+        grade(G, modo, k, dev, forma, estilo)
+    for a, b in pares or PARES:
         ponte_par(G, modo, a, b, dev)
     if modo == "paleta":
-        como_funciona(G, modo, ((25, 249), (1, 6), (133, 94)), dev)
-    especies(G, modo, dev)
-    medidas(G, modo, dev, J, ref, y)
+        como_funciona(G, modo, pares or PARES_PALETA, dev)
+    if not so_misturas:
+        especies(G, modo, dev)
+        medidas(G, modo, dev, J, ref, y)
     print("figuras em", FIG)
 
 
+def _especie(s):
+    """Número da Pokédex dentro das espécies do treino."""
+    e = int(s)
+    if not 1 <= e <= CONFIG["especies"]:
+        raise argparse.ArgumentTypeError(f"{e} fora do treino: use 1 a {CONFIG['especies']}")
+    return e
+
+
+def _par(s):
+    """'A:B' -> (A, B): forma de A, estilo de B."""
+    try:
+        a, b = s.split(":")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{s}' não é um par A:B (ex.: 25:249)") from None
+    return _especie(a), _especie(b)
+
+
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--modo", choices=list(SAIDA), default=MODO)
-    figuras(ap.parse_args().modo)
+    ap.add_argument("--pares", type=_par, nargs="+", metavar="A:B",
+                    help="pares da ponte, forma de A e estilo de B (padrão: %s)" % " ".join(f"{a}:{b}" for a, b in PARES))
+    ap.add_argument("--forma", type=_especie, nargs="+", default=A_ESP, metavar="N",
+                    help="linhas da grade: espécies que dão a forma (padrão: %s)" % " ".join(map(str, A_ESP)))
+    ap.add_argument("--estilo", type=_especie, nargs="+", default=B_ESP, metavar="N",
+                    help="colunas da grade: espécies que dão o estilo (padrão: %s)" % " ".join(map(str, B_ESP)))
+    ap.add_argument("--so-misturas", action="store_true",
+                    help="só a grade e as pontes; pula curvas, espécies e medidas (não precisa do juiz)")
+    x = ap.parse_args()
+    figuras(x.modo, x.pares, tuple(x.forma), tuple(x.estilo), x.so_misturas)
